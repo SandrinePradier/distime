@@ -1,0 +1,31 @@
+{
+  "name": "disttime",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SandrinePradier/distime.git"
+  },
+  "author": "Sandrine Pradier",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SandrinePradier/distime/issues"
+  },
+  "homepage": "https://github.com/SandrinePradier/distime#readme",
+  "devDependencies": {
+    "babel-core": "^6.26.0",
+    "babel-preset-es2015": "^6.24.1",
+    "gulp": "^3.9.1",
+    "gulp-babel": "^7.0.1"
+  },
+  "dependencies": {
+    "body-parser": "^1.18.2",
+    "express": "^4.16.2",
+    "mongoose": "^5.0.8",
+    "request": "^2.83.0"
+  }
+}
