@@ -1,5 +1,6 @@
 
 import express from 'express';
+
 import mongoose from 'mongoose';
 import request from 'request';
 import bodyParser from 'body-parser';
@@ -29,7 +30,6 @@ mongoose.connect(process.env.DB_HOST, function(err){
 		});
 	}
 });
-
 
 
  //1 - getting the full list of communes in Ile de France
@@ -155,12 +155,4 @@ function buildMatrix(){
 
 
 
-//readme:
-//launch npm install
-//set the env variables
-//node index.babel.js
 
-// ****************************
-//- usage of 'request': new to me
-//- GeoJSON: https://www.youtube.com/watch?v=MvY8vcrojYw
-//practice ES6 Import / export / babel
