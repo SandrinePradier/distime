@@ -88,7 +88,7 @@ function callApiGouv(n){
 // }
 
 //getting the list of Paris arrondissement and store them as communes
-function ParisArrSeeder(){
+function parisArrSeeder(){
 	console.log('parisArr:', parisArr);
 	let l=0;
 	for (l=0; l<parisArr.length; l++){
@@ -97,26 +97,33 @@ function ParisArrSeeder(){
 		commune.codeCommune = parisArr[l].codeCommune;
 		commune.coordonnees = parisArr[l].coordonnees;
 		commune.codeDepartment = parisArr[l].codeDepartment;
-		commune.save( (err)=>{
-			if (err){
-				console.log('Error when saving Paris Arrondissements')
+		Commune.findOne({name:commune.name}, function(err, result){
+			if (err) {
+				console.log ('error in parisArrSeeder Commune findOne');
+			}
+			if (result){
+				console.log('the arrondissement already in DB');
 			}
 			else{
-				console.log('arrondissement '+commune.name+ 'saved')
+				commune.save( (err)=>{
+					if (err){
+						console.log('Error when saving Paris Arrondissements')
+					}
+					else{
+						console.log('arrondissement '+commune.name+ 'saved')
+					}
+				})
 			}
 		})
 	}
 }
 
-ParisArrSeeder();
+// parisArrSeeder();
 
 function buildMatrix(){
 	Trajet.find({}, (err, resultTrajet) => {
 		if (err){
 			console.log('buildMatrix trajet.find: error');
-		}
-		if (resultTrajet.length > 0){
-			console.log('Trajet already exist');
 		}
 		else{
 			console.log('lets create Trajet collection');
@@ -133,25 +140,35 @@ function buildMatrix(){
 						for (k=0; k<communes.length; k++){
 							trajet.origin = communes[i];
 							trajet.destination = communes[k];
-						console.log('trajet:', trajet);
-						trajet.save((err)=> {
-							if (err) {
-								console.log('ann error has occured when saving the trajet');
-							}
-							else {
-								console.log('trajet saved');
-							}
-						})
+							console.log('trajet:', trajet);
+							Trajet.findOne({origin:trajet.origin, destination:trajet.destination}, function(err, resultTrajet){
+								if (err){
+									console.log('buildMatrix trajet.find2: error');
+								}
+								if (resultTrajet){
+									console.log('Trajet already exist');
+								}
+								else{
+									trajet.save((err)=> {
+										if (err) {
+											console.log('an error has occured when saving the trajet');
+										}
+										else {
+											console.log('trajet saved: ');
+										}
+									})
+								}
+							})
 						}
 					}
 				}
 			})
 		}
-	});
-};
+	})
+}
 
 
-// buildMatrix();
+buildMatrix();
 
 
 
