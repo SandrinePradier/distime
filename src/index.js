@@ -37,6 +37,7 @@ mongoose.connect(process.env.DB_HOST, function(err){
  //our variables
 let departmentIDF = ['77', '78', '91', '92', '93', '94', '95'];
 
+
 //getting the list of communes from all department exepted Paris
 function callApiGouv(n){
 	let urlApiGouv = "https://geo.api.gouv.fr/departements/"+departmentIDF[(n)]+"/communes?fields=nom,code,codesPostaux,centre,surface,contour,codeDepartement,departement,codeRegion,region&format=geojson&geometry=centre";
@@ -120,27 +121,22 @@ function parisArrSeeder(){
 
 // parisArrSeeder();
 
-function buildMatrix(){
-	Trajet.find({}, (err, resultTrajet) => {
-		if (err){
-			console.log('buildMatrix trajet.find: error');
-		}
-		else{
+
+function buildMatrix(n){
+	//this function build a matrix, represented with Trajet collection.
+	//it build several trajet with the same commune origin, and all the possible communes destination
 			console.log('lets create Trajet collection');
 			Commune.find({}, (err, resultCommune) => {
 				if (err){console.log('buildMatrix commune.find: error')}
 				else{
 					let communes = resultCommune;
-					// console.log(communes.length);
-					let trajet = new Trajet;
-					let i=0;
-					for (i=0; i<communes.length; i++){
-						console.log('communes[i]:', communes[i]);
+					let i=n;
 						let k=0;
 						for (k=0; k<communes.length; k++){
+							let trajet = new Trajet;
 							trajet.origin = communes[i];
 							trajet.destination = communes[k];
-							console.log('trajet:', trajet);
+							// console.log('trajet:', trajet);
 							Trajet.findOne({origin:trajet.origin, destination:trajet.destination}, function(err, resultTrajet){
 								if (err){
 									console.log('buildMatrix trajet.find2: error');
@@ -154,22 +150,71 @@ function buildMatrix(){
 											console.log('an error has occured when saving the trajet');
 										}
 										else {
-											console.log('trajet saved: ');
+											console.log('trajet saved ');
 										}
 									})
 								}
 							})
 						}
-					}
 				}
 			})
-		}
-	})
 }
 
+// Since the function buildMatrix filling trajets with one commune at origin
+// and all other communes at destination requires too much heap memory for node, we will
+// need to slice the commune list to execute it.
+// arr.slice(début, fin) 
+//end excluded
 
-buildMatrix();
+// We need to create a function that slice the list of communes in range of 50 communes.
+// ( 50 have been tested as OK for node not crashing)
 
+let jumpArray = [0];
+let jumpNumber = 10; //we can test many values. upto 50 is OK for node
+
+Commune.find({}, (err, resultCommune)=>{
+	//will be an array with value jumbNumber to jumpNumer ( ex de 10 en 10) from 0 to the number of communes
+	if (err){
+		console.log('error in Commune.find when calling buildMatrix')
+	}
+	else{
+		// 1 - we create the array from 50 to 50
+		let communeList = resultCommune;
+		let a;
+		for (a=0; a<communeList.length-jumpNumber; a=a+jumpNumber){
+			let number = a+jumpNumber;
+			jumpArray.push(number);
+		}
+		jumpArray.push(communeList.length);
+		console.log('jumpArray:', jumpArray);
+
+		//we need to find a way to launch the function by slice, 
+		// and wait the buildMatrix is finished for a given slice to start the buildmatrix for a new slice.
+		processArray(jumpArray, communeList);
+	}
+})
+
+
+async function processArray(array, list){
+		console.log('processArray is called');
+			let i;
+			for (i=0; i<array.length; i++){
+				await processSlice(list, i, i+1);
+			}
+			console.log('full list DONE!');
+		}
+
+async function processSlice(list,a,b){
+	console.log('processSlice is called')
+	//for a range of communes, we wil launch the buildMatrix
+		let range = list.slice(jumpArray[a],jumpArray[b]);
+		console.log('range.length:', range.length);
+		let n=a;
+		for (n=a; n<range.length; n++){
+			buildMatrix(n);
+			console.log('launched buildMatrix n°:', n)
+		}
+}
 
 
 
