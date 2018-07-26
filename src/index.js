@@ -203,49 +203,50 @@ async function createAndSaveTrajet(a,b,communes){
 
 
 
-// let jumpArray = [0, 2, 4];
-// let jumpNumber = 2; //we can test many values. upto 50 is OK for node
+let jumpArray = [0];
+let jumpNumber = 2; //we can test many values. upto 50 is OK for node
 
-// Commune.find({}, (err, resultCommune)=>{
-// 	if (err){
-// 		console.log('error in Commune.find when calling buildMatrix')
-// 	}
-// 	else{
-// 		// 1 - we create the jumpArray from jumpNumber to jumpNumber until the number of communeList
-// 		let communeList = resultCommune;
-// 		// let a;
-// 		// for (a=0; a<communeList.length-jumpNumber; a=a+jumpNumber){
-// 		// 	let number = a+jumpNumber;
-// 		// 	jumpArray.push(number);
-// 		// }
-// 		// jumpArray.push(communeList.length);
-// 		// console.log('jumpArray:', jumpArray);
-// 		processArray(jumpArray, communeList);
-// 	}
-// })
+Commune.find({}, (err, resultCommune)=>{
+	if (err){
+		console.log('error in Commune.find when calling buildMatrix')
+	}
+	else{
+		// 1 - we create the jumpArray from jumpNumber to jumpNumber until the number of communeList
+		let communeList = resultCommune;
+		let a;
+		// for (a=0; a<communeList.length-jumpNumber; a=a+jumpNumber){
+		for (a=0; a<10; a=a+jumpNumber){
+			let number = a+jumpNumber;
+			jumpArray.push(number);
+		}
+		// jumpArray.push(communeList.length);
+		console.log('jumpArray:', jumpArray);
+		processArray(jumpArray, communeList);
+	}
+})
 
 
-// async function processArray(array, list){
-// 		console.log('processArray is called');
-// 		// once one slice has been processed, we will launch another slice, 
-// 		//until all the sliced have been process ( ie the full list of communes)
-// 			let i;
-// 			for (i=0; i<array.length; i++){
-// 				await processSlice(list, i, i+1);
-// 			}
-// 		}
+async function processArray(array, list){
+		console.log('processArray is called');
+		// once one slice has been processed, we will launch another slice, 
+		//until all the sliced have been process ( ie the full list of communes)
+			let i;
+			for (i=0; i<array.length-1; i++){
+				await processSlice(list, i, i+1);
+			}
+		}
 
-// async function processSlice(list,a,b){
-// 	//for a range of communes, we will launch the buildMatrix
-// 		let range = list.slice(jumpArray[a],jumpArray[b]);
-// 		console.log('range start:', jumpArray[a]);
-// 		console.log('under processing slice: ' +jumpArray[a]+ ' to ' +jumpArray[b]+ '.');
-// 		let n;
-// 		for (n=jumpArray[a]; n<range.length; n++){
-// 			console.log('n:', n);
-// 			buildMatrix(n);
-// 		}
-// }
+async function processSlice(list,a,b){
+	//for a range of communes, we will launch the buildMatrix
+		let range = list.slice(jumpArray[a],jumpArray[b]);
+		// console.log('rangelenght:', range.length);
+		console.log('under processing slice: ' +jumpArray[a]+ ' to ' +jumpArray[b]+ '.');
+		let n;
+		for (n=jumpArray[a]; n<jumpArray[b]; n++){
+			console.log('n:', n);
+			buildMatrix(n);
+		}
+}
 
 
 
