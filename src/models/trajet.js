@@ -5,6 +5,9 @@ import {communeSchema} from './commune.js';
 let Schema = mongoose.Schema;
 
 let trajetSchema = new Schema({
+		code: {
+			type: String
+		},
 		origin: communeSchema,
 		destination: communeSchema,
 		distance:{

@@ -124,97 +124,128 @@ function parisArrSeeder(){
 
 function buildMatrix(n){
 	//this function build a matrix, represented with Trajet collection.
-	//it build several trajet with the same commune origin, and all the possible communes destination
-			console.log('lets create Trajet collection');
+	//it build several trajet with the one commune origin, and all the possible communes destination
+			console.log('launched buildMatrix n°:', n);
 			Commune.find({}, (err, resultCommune) => {
 				if (err){console.log('buildMatrix commune.find: error')}
 				else{
 					let communes = resultCommune;
-					let i=n;
 						let k=0;
-						for (k=0; k<communes.length; k++){
-							let trajet = new Trajet;
-							trajet.origin = communes[i];
-							trajet.destination = communes[k];
-							// console.log('trajet:', trajet);
-							Trajet.findOne({origin:trajet.origin, destination:trajet.destination}, function(err, resultTrajet){
-								if (err){
-									console.log('buildMatrix trajet.find2: error');
-								}
-								if (resultTrajet){
-									console.log('Trajet already exist');
-								}
-								else{
-									trajet.save((err)=> {
-										if (err) {
-											console.log('an error has occured when saving the trajet');
-										}
-										else {
-											console.log('trajet saved ');
-										}
-									})
-								}
-							})
+						for (k=0; k<=communes.length; k++){
+								// console.log('n début du for:', n);
+								// console.log('k début du for:', k);
+								createAndSaveTrajet(n,k, communes);
 						}
 				}
 			})
 }
 
-// Since the function buildMatrix filling trajets with one commune at origin
-// and all other communes at destination requires too much heap memory for node, we will
-// need to slice the commune list to execute it.
-// arr.slice(début, fin) 
-//end excluded
-
-// We need to create a function that slice the list of communes in range of 50 communes.
-// ( 50 have been tested as OK for node not crashing)
-
-let jumpArray = [0];
-let jumpNumber = 10; //we can test many values. upto 50 is OK for node
-
-Commune.find({}, (err, resultCommune)=>{
-	//will be an array with value jumbNumber to jumpNumer ( ex de 10 en 10) from 0 to the number of communes
-	if (err){
-		console.log('error in Commune.find when calling buildMatrix')
-	}
-	else{
-		// 1 - we create the array from 50 to 50
-		let communeList = resultCommune;
-		let a;
-		for (a=0; a<communeList.length-jumpNumber; a=a+jumpNumber){
-			let number = a+jumpNumber;
-			jumpArray.push(number);
-		}
-		jumpArray.push(communeList.length);
-		console.log('jumpArray:', jumpArray);
-
-		//we need to find a way to launch the function by slice, 
-		// and wait the buildMatrix is finished for a given slice to start the buildmatrix for a new slice.
-		processArray(jumpArray, communeList);
-	}
-})
-
-
-async function processArray(array, list){
-		console.log('processArray is called');
-			let i;
-			for (i=0; i<array.length; i++){
-				await processSlice(list, i, i+1);
-			}
-			console.log('full list DONE!');
-		}
-
-async function processSlice(list,a,b){
-	console.log('processSlice is called')
-	//for a range of communes, we wil launch the buildMatrix
-		let range = list.slice(jumpArray[a],jumpArray[b]);
-		console.log('range.length:', range.length);
-		let n=a;
-		for (n=a; n<range.length; n++){
-			buildMatrix(n);
-			console.log('launched buildMatrix n°:', n)
-		}
+async function createTrajet(a,b, communes){
+	console.log('async createTrajet called');
+	let trajet = new Trajet;
+			trajet.code = +a+'-'+b;
+			trajet.origin = communes[a];
+			trajet.destination = communes[b];
+	// console.log('trajet:', trajet);
+	return trajet;
 }
+
+async function saveTrajet(trajet){
+	console.log('async saveTrajet called');
+	Trajet.findOne({code:trajet.code}, (err, resultTrajet)=>{
+								if (err){
+									console.log('buildMatrix trajet.find: error');
+									return null;
+								}
+								if (resultTrajet){
+									console.log('Trajet already exist:', resultTrajet.code);
+									return null;
+								}
+								else{
+									console.log('let save trajet');
+									trajet.save((err, saved)=>{
+										if (err) {
+											console.log('an error has occured when saving the trajet');
+											return null;
+										}
+										else {
+											console.log('trajet saved :', saved);
+											return saved;
+										}
+									})
+								}
+	});
+}
+
+
+async function createAndSaveTrajet(a,b,communes){
+	console.log('async createAndSaveTrajet called' +a+ '-' +b+ '.');
+	let created = await createTrajet(a,b,communes);
+	let saved = await saveTrajet(created);
+}
+
+// buildMatrix(2);
+// let n;
+// for (n=0; n<5; n++){
+// 	buildMatrix(n);
+// }
+
+
+// Initially the function buildMatrix creating trajets with all communes at origin and all communes at destination
+//requires too much heap memory for node, so we have amended it so that it creates trajet for one commune at origin 
+//and all other communes at destination.
+// than we make a for loop for several origins.
+// => We need to create a function that slice the list of communes in ranges of several communes.
+// ( 50 have been tested as OK for node not crashing)
+// arr.slice(start, end) start included, end excluded;
+// jumpArray will represent an array where rank i will be the start of the slice and i+1 the end of the slice
+// jumpNumber will be the number of communes  of the slice
+
+
+
+// let jumpArray = [0, 2, 4];
+// let jumpNumber = 2; //we can test many values. upto 50 is OK for node
+
+// Commune.find({}, (err, resultCommune)=>{
+// 	if (err){
+// 		console.log('error in Commune.find when calling buildMatrix')
+// 	}
+// 	else{
+// 		// 1 - we create the jumpArray from jumpNumber to jumpNumber until the number of communeList
+// 		let communeList = resultCommune;
+// 		// let a;
+// 		// for (a=0; a<communeList.length-jumpNumber; a=a+jumpNumber){
+// 		// 	let number = a+jumpNumber;
+// 		// 	jumpArray.push(number);
+// 		// }
+// 		// jumpArray.push(communeList.length);
+// 		// console.log('jumpArray:', jumpArray);
+// 		processArray(jumpArray, communeList);
+// 	}
+// })
+
+
+// async function processArray(array, list){
+// 		console.log('processArray is called');
+// 		// once one slice has been processed, we will launch another slice, 
+// 		//until all the sliced have been process ( ie the full list of communes)
+// 			let i;
+// 			for (i=0; i<array.length; i++){
+// 				await processSlice(list, i, i+1);
+// 			}
+// 		}
+
+// async function processSlice(list,a,b){
+// 	//for a range of communes, we will launch the buildMatrix
+// 		let range = list.slice(jumpArray[a],jumpArray[b]);
+// 		console.log('range start:', jumpArray[a]);
+// 		console.log('under processing slice: ' +jumpArray[a]+ ' to ' +jumpArray[b]+ '.');
+// 		let n;
+// 		for (n=jumpArray[a]; n<range.length; n++){
+// 			console.log('n:', n);
+// 			buildMatrix(n);
+// 		}
+// }
 
 
 
