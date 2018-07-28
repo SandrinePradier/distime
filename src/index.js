@@ -32,13 +32,15 @@ mongoose.connect(process.env.DB_HOST, function(err){
 });
 
 
+//1ST STEP *******************************************************
+
  //1 - getting the full list of communes in Ile de France
 
  //our variables
 let departmentIDF = ['77', '78', '91', '92', '93', '94', '95'];
 
 
-//getting the list of communes from all department exepted Paris
+//1-a getting the list of communes from all department exepted Paris
 function callApiGouv(n){
 	let urlApiGouv = "https://geo.api.gouv.fr/departements/"+departmentIDF[(n)]+"/communes?fields=nom,code,codesPostaux,centre,surface,contour,codeDepartement,departement,codeRegion,region&format=geojson&geometry=centre";
 	request(urlApiGouv, (error, response, body) => {
@@ -88,7 +90,7 @@ function callApiGouv(n){
 // 	callApiGouv(j);
 // }
 
-//getting the list of Paris arrondissement and store them as communes
+//1-b getting the list of Paris arrondissement and store them as communes
 function parisArrSeeder(){
 	console.log('parisArr:', parisArr);
 	let l=0;
@@ -121,6 +123,12 @@ function parisArrSeeder(){
 
 // parisArrSeeder();
 
+
+
+//2ND STEP *******************************************************
+//Building the matrix with all communes
+
+//2-a buildmatrix function
 
 function buildMatrix(n){
 	//this function build a matrix, represented with Trajet collection.
@@ -179,51 +187,48 @@ async function saveTrajet(trajet){
 
 
 async function createAndSaveTrajet(a,b,communes){
-	console.log('async createAndSaveTrajet called' +a+ '-' +b+ '.');
+	console.log('async createAndSaveTrajet called: ' +a+ '-' +b+ '.');
 	let created = await createTrajet(a,b,communes);
 	let saved = await saveTrajet(created);
 }
 
-// buildMatrix(2);
-// let n;
-// for (n=0; n<5; n++){
-// 	buildMatrix(n);
-// }
 
+
+//2-b Applying buildingMatrix to the whole list of communes
 
 // Initially the function buildMatrix creating trajets with all communes at origin and all communes at destination
 //requires too much heap memory for node, so we have amended it so that it creates trajet for one commune at origin 
 //and all other communes at destination.
 // than we make a for loop for several origins.
 // => We need to create a function that slice the list of communes in ranges of several communes.
-// ( 50 have been tested as OK for node not crashing)
 // arr.slice(start, end) start included, end excluded;
 // jumpArray will represent an array where rank i will be the start of the slice and i+1 the end of the slice
 // jumpNumber will be the number of communes  of the slice
 
 
-
 let jumpArray = [0];
 let jumpNumber = 2; //we can test many values. upto 50 is OK for node
 
-Commune.find({}, (err, resultCommune)=>{
-	if (err){
-		console.log('error in Commune.find when calling buildMatrix')
-	}
-	else{
-		// 1 - we create the jumpArray from jumpNumber to jumpNumber until the number of communeList
-		let communeList = resultCommune;
-		let a;
-		// for (a=0; a<communeList.length-jumpNumber; a=a+jumpNumber){
-		for (a=0; a<10; a=a+jumpNumber){
-			let number = a+jumpNumber;
-			jumpArray.push(number);
-		}
-		// jumpArray.push(communeList.length);
-		console.log('jumpArray:', jumpArray);
-		processArray(jumpArray, communeList);
-	}
-})
+// Commune.find({}, (err, resultCommune)=>{
+// 	if (err){
+// 		console.log('error in Commune.find when calling buildMatrix')
+// 	}
+// 	else{
+// 		// 1 - we create the jumpArray from jumpNumber to jumpNumber until the number of communeList
+// 		let communeList = resultCommune;
+// 		let a;
+// 		// do not works processSlice are launched all together, and node crashes
+// 		for (a=0; a<communeList.length-jumpNumber; a=a+jumpNumber){
+// 		// works OK
+// 		// for (a=0; a<10; a=a+jumpNumber){
+// 			let number = a+jumpNumber;
+// 			jumpArray.push(number);
+// 		}
+// 		jumpArray.push(communeList.length);
+// 		console.log('jumpArray:', jumpArray);
+// 		// processArray(jumpArray, communeList);
+// 	}
+// })
 
 
 async function processArray(array, list){
@@ -244,9 +249,82 @@ async function processSlice(list,a,b){
 		let n;
 		for (n=jumpArray[a]; n<jumpArray[b]; n++){
 			console.log('n:', n);
-			buildMatrix(n);
+			// buildMatrix(n);
 		}
 }
 
+//this is not fully finalised. 
 
 
+
+//3RD STEP *******************************************************
+//feeding the matrix with distance and driving time using mapbox API
+//NB: distance will be retreived in meter, and duration in seconds. we will convert distance in km, and duration in minutes
+
+//3-a Getting the distance and driving time for one trajet.
+function mapboxCall(trajet){
+	console.log('mapboxCall called');
+	let lonO=trajet.origin.coordonnees[0];
+	let latO=trajet.origin.coordonnees[1];
+	let lonD=trajet.destination.coordonnees[0];
+	let latD=trajet.destination.coordonnees[1];
+	let urlMapbox = 'https://api.mapbox.com/directions/v5/mapbox/driving/'+lonO+'%2C'+latO+'%3B'+lonD+'%2C'+latD+'.json?access_token='+process.env.MAPBOX_TOKEN
+	let drivingTimeMin = '';
+	let distanceTrajetKm = '';
+	request(urlMapbox, (error, response, body) => {
+		if(error){
+			console.log('error when calling mapbox API')
+		}
+		else{
+			let jsonBody = JSON.parse(body);
+			let drivingTime = jsonBody.routes[0].duration;
+			drivingTimeMin = drivingTime/60;
+			console.log('drivingTimeMin:', drivingTimeMin);
+			let distanceTrajet = jsonBody.routes[0].distance;
+			distanceTrajetKm = distanceTrajet/1000;
+			console.log('distanceKM:', distanceTrajetKm);
+			updateTrajet(trajet,distanceTrajetKm,drivingTimeMin);
+		}
+	})
+}
+
+
+//3-b Updating the trajet with the distance and driving time: OK
+// AModel.findOneAndUpdate(conditions, update, options, callback)
+// options : specify upsert : true => if object not created, it will create it.
+function updateTrajet(trajet, dist, drive){
+	let query = {code:trajet.code};
+	let updateDoc = {distance:dist, timeToDestinationDriving:drive};
+	let option = {upsert:true};
+	Trajet.findOneAndUpdate(query,updateDoc,option,(err, resultUpdated) =>{
+		if(err){
+			console.log('error when calling trajet.findOne in updateTrajet');
+		}
+		else{
+			console.log('resultUpdated:', resultUpdated);
+		}
+	})
+}
+
+
+//3-c feeding the matrix by calling the function for all trajets
+
+//test for one trajet: OK
+Trajet.findOne({code:'1-2'}, (err, resultTrajet)=>{
+	if (err){
+		console.log('Trajet to updtae not found')
+	}
+	else {
+		console.log('resultTrajet:', resultTrajet);
+		mapboxCall(resultTrajet);
+	}
+})
+
+
+//4RTH STEP *******************************************************
+//feeding the matrix with transport time
+
+//4-a Building the function to get the transport time between 2 communes
+
+
+//4-b feeding the matrix by calling the function for all documents
