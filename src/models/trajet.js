@@ -4,19 +4,40 @@ import {communeSchema} from './commune.js';
 
 let Schema = mongoose.Schema;
 
+// let trajetSchema = new Schema({
+// 		code: {
+// 			type: String
+// 		},
+// 		origin: communeSchema,
+// 		destination: communeSchema,
+// 		distance:{
+// 			type: String
+// 		},
+// 		timeToDestinationDriving: {
+// 			type: String
+// 		},
+// 		timeToDestinationTransport: {
+// 			type: String
+// 		}
+// });
+
 let trajetSchema = new Schema({
 		code: {
 			type: String
 		},
-		origin: communeSchema,
-		destination: communeSchema,
+		origin: {
+			type: String
+		},
+		destination: {
+			type: String
+		},
 		distance:{
 			type: String
 		},
-		timeToDestinationDriving: {
+		timeDriving: {
 			type: String
 		},
-		timeToDestinationTransport: {
+		timeTransport: {
 			type: String
 		}
 });
