@@ -24,12 +24,15 @@ let Schema = mongoose.Schema;
 let trajetSchema = new Schema({
 		code: {
 			type: String
+			// ex: '5-48'
 		},
 		origin: {
 			type: String
+			//code insee commune
 		},
 		destination: {
 			type: String
+			//code insee commune
 		},
 		distance:{
 			type: String

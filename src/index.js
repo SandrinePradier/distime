@@ -2,15 +2,15 @@
 import express from 'express';
 
 import mongoose from 'mongoose';
-import request from 'request';
 import bodyParser from 'body-parser';
 import morgan from 'morgan';
 import dotEnv from 'dotenv';
 import fs from 'fs';
 import _ from 'underscore';
+
 import moment from 'moment';
-import hbs from 'hbs';
-import path from 'path';
+// import hbs from 'hbs';
+// import path from 'path';
 
 dotEnv.config();
 
@@ -18,6 +18,9 @@ import {Commune} from './models/commune.js';
 import {Trajet} from './models/trajet.js';
 import {parisArr} from './models/parisseeder.js';
 import {Batch} from './models/batch.js';
+import * as com from './communelist.js';
+import * as api from './api.js';
+import * as traj from './trajet.js';
 
 // App init
 let app = express();
@@ -25,6 +28,22 @@ let app = express();
 app.use(morgan('dev'));
 app.use(bodyParser.json()); // for parsing application/json
 app.use(bodyParser.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
+
+
+//cors
+// CORS cross-origin
+app.use(function (req, res, next) {
+ // res.header(`Access-Control-Allow-Origin`, `https://mywebsite);
+ res.header(`Access-Control-Allow-Origin`, `*`);
+ res.header(`Access-Control-Allow-Methods`, `GET,PUT,POST,DELETE, OPTIONS`);
+ res.header(`Access-Control-Allow-Headers`, `Origin, X-Requested-With, Content-Type, Accept`);
+ // intercept OPTIONS method
+  if ('OPTIONS' == req.method) res.sendStatus(200);
+  else next();
+ 
+});
+
+
 
 // setting and connecting our data base
 mongoose.connect(process.env.DB_HOST, function(err){
@@ -37,440 +56,229 @@ mongoose.connect(process.env.DB_HOST, function(err){
 	}
 });
 
+//END POINTS *******************************************************
 
-
-
-// test setting template engine and rendering
-app.set('view engine', 'hbs');
-app.set('views', path.join(__dirname, 'views/'));
-app.use(express.static(__dirname + '/public'));
-
-
-hbs.registerHelper('getBatchNumber',(n, i)=>{
- return `${n}-...to ${n+i}`
-});
-
-hbs.registerHelper('callFunction', function callFunction(){
-	console.log('function called');
-}
-);
-
-
-// the idea is to have a endpoint with batch number as parameter
-// to launch build matrix and api call in this request.
+//send back the whole list of batches with status
 app.get('/', (req, res) => {
-	// res.send('Welcome to Distime Application');
-	res.render('welcome.hbs', {
-		text: 'here is my text!'
-	});
+	Batch.find({}, (err, result)=>{
+		if(err){
+			res.status(202).json({'error': 'error when retreiving batchList'})
+		}
+		else{
+			res.status(200).json({'data': result})
+		}
+	})
 })
 
+// Endpoint with batch number as parameter
+// to launch build matrix and api call in this request.
+app.get('/:id', (req, res) => {
+	console.log('request to launch batch:',req.params.id);
+	Batch.find({batchName:req.params.id}, (err, result)=>{
+		if(err){
+			res.status(202).json({'error': 'error when retreiving batchList'})
+		}
+		else{
+			res.status(200).json({'data': result});
+			//here we launch the function launch batch.
+			//rajouter la condition si status = 'toDo'
+			//if batch pair : use 1stKey, if batch impair : use 2ndkey
+		buildMatrixForABatch(result[0].communesIndex)
+		.then(() => {
+			feedMatrixForABatch();
+		})
+		.then(() => console.log('DONE'))
+		.catch((e) => console.log(e))
+	}
+			//sinon renvoyer un message que ce batch est déjà lancé.
+			//ensuite il faudra que le batch change de status
+	})
+})
 
 
 
 //1ST STEP *******************************************************
 
- //1 - getting the full list of communes in Ile de France
+		//get the full list of communes in Ile de France and set up in batchs ( chunks of communes)
+		//TODO: RETEST
 
- //our variables
-let departmentIDF = ['77', '78', '91', '92', '93', '94', '95'];
+		 //our variables
+		let departmentIDF = ['77', '78', '91', '92', '93', '94', '95'];
+		let communeCodeList = [];
 
-
-//1-a getting the list of communes from all department exepted Paris
-function callApiGouv(n){
-	let urlApiGouv = "https://geo.api.gouv.fr/departements/"+departmentIDF[(n)]+"/communes?fields=nom,code,codesPostaux,centre,surface,contour,codeDepartement,departement,codeRegion,region&format=geojson&geometry=centre";
-	request(urlApiGouv, (error, response, body) => {
-		if (error){
-			console.log('error:', error);
-		}
-		else {
-			console.log('statusCode:', response.statusCode);
-			let bodyjson = JSON.parse(body);
-			let communesList = bodyjson.features;
-			console.log('number of communes found:', communesList.length);
-			let i=0;
-			for (i=0; i<communesList.length; i++){
-
-				let commune = new Commune;
-				commune.name = communesList[i].properties.nom;
-				commune.codeCommune = communesList[i].properties.code;
-				commune.coordonnees = communesList[i].geometry.coordinates;
-				commune.codeDepartment = communesList[i].properties.codeDepartement;
-				console.log('commune:', commune);
-
-				Commune.findOne({codeCommune:communesList[i].properties.code}, function(err, result){
-					if (err) console.log('error')
-					if (result){
-						console.log('commune already in the DB');
-					}
-					else {
-						commune.save((err) => {
-							if(err){
-								return err;
-								console.log('commune could not be saved');
-							}
-							else {
-								console.log('new commune saved:', commune);
-							}
-						});
-					}
-				})
-			}
-		}
-	})
-}
-
-// let j=0;
-// for (j=0; j<departmentIDF.length; j++){
-// 	callApiGouv(j);
-// }
+		//>>>>>>>>>>>>>>To define
+		let chunk = 6;
 
 
-//1-b getting the list of Paris arrondissement and store them as communes
-function parisArrSeeder(){
-	console.log('parisArr:', parisArr);
-	let l=0;
-	for (l=0; l<parisArr.length; l++){
-		let commune = new Commune;
-		commune.name = parisArr[l].name;
-		commune.codeCommune = parisArr[l].codeCommune;
-		commune.coordonnees = parisArr[l].coordonnees;
-		commune.codeDepartment = parisArr[l].codeDepartment;
-		Commune.findOne({name:commune.name}, function(err, result){
-			if (err) {
-				console.log ('error in parisArrSeeder Commune findOne');
-			}
-			if (result){
-				console.log('the arrondissement already in DB');
-			}
-			else{
-				commune.save( (err)=>{
-					if (err){
-						console.log('Error when saving Paris Arrondissements')
-					}
-					else{
-						console.log('arrondissement '+commune.name+ 'saved')
-					}
-				})
-			}
-		})
-	}
-}
+		//1-a getting the list of communes from all department exepted Paris
 
-// parisArrSeeder();
+			//>>>>>>>>>>>>>>To be launched one time only
+			// let j=0;
+			// for (j=0; j<departmentIDF.length; j++){
+			// 	com.callApiGouv(j);
+			// }
+
+		//1-b getting the list of Paris arrondissement and store them as communes
+
+			//>>>>>>>>>>>>>>to be launched One time only
+			// com.parisArrSeeder();
+
+		//1-c creating the communeCodeList Array
+		//each commune will be maped with an integer, and listed in an array.
+		// the array will be dispatched in sub arrays to enable to deal the list by batches.
+		// the variable chunk sets the length of the sub arrays.
+
+			//>>>>>>>>>>>>>>To be launched One time only
+			// com.createCommuneList()
+			// .then((list) => com.createBatch(list, chunk))
+			// .then((result) => com.saveBatches(result))
+			// .catch((e) => console.log('a problem when create Batch and saving batch has occured'))
 
 
-//1-c creating the communeCodeList Array
-//each commune will be maped with an integer, and listed in an array.
-// the array will be dispatched in sub arrays to enable to deal the list by batches.
-// the variable chunk sets the length of the sub arrays.
-
-let communeCodeList = [];
-let chunk = 3;
-
-async function createCommuneList(){
-	return Commune.find({})
-	.then((result)=>{
-		let list=[];
-		let i=0;
-		for (i=0; i<result.length; i++){
-			list.push(i);
-		}
-		return list;
-	})
-	.catch((e)=> console.log('error when creating commune batches'))
-}
 
 
-async function createBatch(codeList){
-	try {
-		communeCodeList = _.chunk(codeList,chunk);
-		// console.log('communeCodeList:', communeCodeList);
-		return communeCodeList
-	} catch (e){
-		console.log(e);
-	}
-}
+// 2ND STEP *******************************************************
+
+		//Building the matrix with all communes
+		// The matrix will be build progressively when user launch batches from user interface and call
+		//see also trajet.js file
 
 
-async function saveBatches(chunkList){
-		console.log('launched saveBatches');
-		Batch.find({}, (err, resultBatch) => {
-			if (err){ console.log('saveBatches batch.find : error')};
-			if (resultBatch.length>0){
-				console.log('batches already exist:', resultBatch);
-			}
-			else{
-				console.log('let\'s create batches');
-				let i=0;
-				for (i=0; i<chunkList.length; i++){
-					let batch = new Batch;
-					batch.batchName = i;
-					batch.communesIndex = chunkList[i];
-					batch.status = "to be launched";
-					console.log(batch);
-					batch.save((err, saved)=>{
-						if (err){
-							console.log('error when saving batches');
-						}
+		//***********creating matrix for one commune 
+		//creating all possible trajets from this commune as origin******************
+		//communeCode is the communeIndex
+
+		async function buildMatrix(communeCode){
+					console.log('launched buildMatrix n°:', communeCode);
+					Commune.find({}, (err, resultCommune) => {
+						if (err){console.log('buildMatrix commune.find: error')}
 						else{
-							console.log(`batch ${batch.batchName} has been saved`)
+							let communes = resultCommune;
+								let k=0;
+								for (k=0; k<communes.length; k++){
+										traj.createAndSaveTrajet(communeCode,k, communes);
+								}
 						}
 					})
-				}
-			}
-		})
-}
+		}
 
 
-createCommuneList()
-.then((list) => createBatch(list))
-.then((result) => saveBatches(result))
-.catch((e) => console.log('a problem when create Batch and saving batch has occured'))
+		//***********applying build matrix to one batch******************
+		//already tested with a batch of 30 communes: OK
 
 
+		let buildMatrixForAListOfCommunes = async(list) => {
+			list.forEach((communeCode) => {
+				buildMatrix(communeCode);
+			});
+			return 'OK';
+		}
+			
+		let buildMatrixForABatch = async (batch) => {
+			//ex of parameter: array with index of communes : [168, 169, 170, 171, 172, 173]
+			//Fonctionne : OK
+			// the number will set the number of elements for the chunk size.
+			//for testing, should be batch / 3
+			//in real life, should be set to 10 for a batch of 30 communes
+			const chunkedList = await _.chunk(batch, 2);
 
+			console.log('chunkedList:', chunkedList);
+			// ex chunkedList: [ [ 168, 169 ], [ 170, 171 ], [ 172, 173 ] ]
+			const resulta = await buildMatrixForAListOfCommunes(chunkedList[0]);
+			const resultb = await buildMatrixForAListOfCommunes(chunkedList[1]);
+			const resultc = await buildMatrixForAListOfCommunes(chunkedList[2]);
+			const final = await result(resulta,resultb,resultc,chunkedList);
+			return final;
+		}
 
-//2ND STEP *******************************************************
-//Building the matrix with all communes
-
-//2-a buildmatrix function
-
-
-
-async function createTrajet(a,b, communes){
-	console.log('async createTrajet called');
-	let trajet = new Trajet;
-			trajet.code = +a+'-'+b;
-			trajet.origin = communes[a].codeCommune;
-			trajet.destination = communes[b].codeCommune;
-	return trajet;
-}
-
-async function saveTrajet(trajet){
-	console.log('async saveTrajet called');
-	let start = Date.now();
-	Trajet.findOne({code:trajet.code}, (err, resultTrajet)=>{
-								if (err){
-									console.log('buildMatrix trajet.find: error');
-									return null;
-								}
-								if (resultTrajet){
-									console.log('Trajet already exist:', resultTrajet.code);
-									return null;
-								}
-								else{
-									console.log('let save trajet');
-									trajet.save((err, saved)=>{
-										if (err) {
-											console.log('an error has occured when saving the trajet');
-											return null;
-										}
-										else {
-											console.log('trajet saved :', saved);
-											let savingTime = Date.now()-start;
-											console.log('savingTime:', savingTime);
-											// savingTimes.push(moment(savingTime));
-											return saved;
-										}
-									})
-								}
-	});
-}
-
-
-async function createAndSaveTrajet(a,b,communes){
-	console.log('async createAndSaveTrajet called: ' +a+ '-' +b+ '.');
-	let created = await createTrajet(a,b,communes);
-	let saved = await saveTrajet(created);
-	return saved;
-}
-
-async function buildMatrix(communeCode){
-	//this function build a matrix, represented with Trajet collection.
-	//it builds several trajet with communeCode as the one for origin, and all the possible communes destination
-			// communeCode should be the commune.code
-			console.log('launched buildMatrix n°:', communeCode);
-			Commune.find({}, (err, resultCommune) => {
-				if (err){console.log('buildMatrix commune.find: error')}
-				else{
-					let communes = resultCommune;
-						let k=0;
-						for (k=0; k<communes.length; k++){
-								createAndSaveTrajet(communeCode,k, communes);
-						}
-				}
-			})
-}
-
-
-//2-b Applying buildingMatrix to a batch of communes
-//------TODO: to finalise. already tested with a batch of 30 communes: OK
-//------TODO: imporove error handeling and async/await .then
-
-// Initially the function buildMatrix creating trajets with all communes at origin and all communes at destination
-//requires too much heap memory for node, so we have amended it so that it creates trajet for one commune at origin 
-//and all other communes at destination.
-// then we call the function buildMatrix for several communeCode
-
-let applyBuildMatrix = async(list) => {
-	list.forEach((communeCode) => {
-		buildMatrix(communeCode);
-	});
-	return 'OK';
-}
-	
-let groupApply = async (list) => {
-	const resulta = await applyBuildMatrix(list[0]);
-	const resultb = await applyBuildMatrix(list[1]);
-	const resultc = await applyBuildMatrix(list[2]);
-	const final = await result(resulta,resultb,resultc,list);
-	return final;
-}
-
-
-let result = async (a,b,c,list) => {
-	fs.appendFileSync('savingTimes.txt', `trajet saving starting by ${list} :ok //`);
-}
-
-
-
+		let result = async (a,b,c,list) => {
+			//to be improved: see how to go next line
+			// change the batch status
+			fs.appendFileSync('savingTimes.txt', `trajet saving starting by ${list} :ok, on ${moment().format('LLLL')}//`);
+		}
 
 
 
 
 //3RD STEP *******************************************************
-//feeding the matrix with distance and driving time using mapbox API
-//NB: distance will be retreived in meter, and duration in seconds. we will convert distance in km, and duration in minutes
+//feeding the matrix by calling the function for all trajets
 
-//3-a Getting the distance and driving time for one trajet.
-function mapboxCall(trajet){
-	console.log('mapboxCall called');
-	let lonO=trajet.origin.coordonnees[0];
-	let latO=trajet.origin.coordonnees[1];
-	let lonD=trajet.destination.coordonnees[0];
-	let latD=trajet.destination.coordonnees[1];
-	let urlMapbox = 'https://api.mapbox.com/directions/v5/mapbox/driving/'+lonO+'%2C'+latO+'%3B'+lonD+'%2C'+latD+'.json?access_token='+process.env.MAPBOX_TOKEN
-	let drivingTimeMin = '';
-	let distanceTrajetKm = '';
-	request(urlMapbox, (error, response, body) => {
-		if(error){
-			console.log('error when calling mapbox API');
+
+		//***********feeding matrix for one trajet***********
+
+		function fillOneTrajet (trajetCode){
+			console.log(trajetCode);
+			traj.trajet(trajetCode)
+				.then( async (result) => {
+					//insert geocoordonnées in result trajet
+					let resultTrajet = JSON.parse(JSON.stringify(result));
+					let origin = await traj.ori(result);
+					let destination = await traj.dest(result);
+					resultTrajet.origin = origin.coordonnees;
+					resultTrajet.destination = destination.coordonnees;
+				 	return resultTrajet;
+				})
+				.then( async(resultTrajet) => {
+					api.mapboxCall(resultTrajet);
+					api.nativiaCall(resultTrajet);
+				})
+				.catch((e) => console.log(e))
 		}
-		else{
-			let jsonBody = JSON.parse(body);
-			let drivingTime = jsonBody.routes[0].duration;
-			drivingTimeMin = drivingTime/60;
-			console.log('drivingTimeMin:', drivingTimeMin);
-			let distanceTrajet = jsonBody.routes[0].distance;
-			distanceTrajetKm = distanceTrajet/1000;
-			console.log('distanceKM:', distanceTrajetKm);
-			updateTrajet(trajet,distanceTrajetKm,drivingTimeMin);
+
+
+
+// fillOneTrajet('175-149');
+
+
+		//***********feeding matrix for several trajets***********
+
+		async function fillSeveralTrajet (listTrajetCode) {
+			try {
+				return listTrajetCode.forEach((trajetCode) => {
+					console.log(`trajetCode ${trajetCode} is going to be filled`);
+					fillOneTrajet(trajetCode);
+				})
+			}
+			catch (e){
+				console.log('problem in fillSeveralTrajet');
+			}
 		}
-	})
-}
 
+	
 
-// 3-b Updating the trajet with the distance and driving time: OK
-// AModel.findOneAndUpdate(conditions, update, options, callback)
-// options : specify upsert : true => if object not created, it will create it.
-function updateTrajet(trajet, dist, drive){
-	let query = {code:trajet.code};
-	let updateDoc = {distance:dist, timeDriving:drive};
-	let option = {upsert:true};
-	Trajet.findOneAndUpdate(query,updateDoc,option,(err, resultUpdated) =>{
-		if(err){
-			console.log('error when calling trajet.findOne in updateTrajet');
+		//********** Feeding Matrix For A Batch ****************
+
+		async function feedMatrixForABatch(){
+			traj.checkEmptyTrajet()
+				.then((resultEmptyTrajet) => {
+					//return an array with trajets
+					// console.log('resultEmptyTrajet.length', resultEmptyTrajet.length);
+					// console.log('resultEmptyTrajet', resultEmptyTrajet);
+
+					if (resultEmptyTrajet.length > 0){
+							console.log('resultEmptyTrajet.length', resultEmptyTrajet.length);
+							fillSeveralTrajet(resultEmptyTrajet.slice(0,10).map((e) => {return e.code}))
+							.then(()=>{
+								feedMatrixForABatch()
+							})
+						}
+					else {
+						console.log('feedingMatrix for the request batch completed');
+						return 'Batch done';
+					}
+				})
 		}
-		else{
-			console.log('resultUpdated:', resultUpdated);
-		}
-	})
-}
 
 
-// 3-c feeding the matrix by calling the function for all trajets
-
-// test for one trajet: OK
-
-// Trajet.findOne({code:'2-32'}, (err, resultTrajet) => {
-// 	if (err){
-// 		console.log('Trajet to updtae not found');
-// 	}
-// 	else {
-// 		console.log('resultTrajet:', resultTrajet);
-// 		mapboxCall(resultTrajet);
-// 		nativiaCall(resultTrajet);
-// 	}
-// })
-
-
-// 4RTH STEP *******************************************************
-// feeding the matrix with transport time using nativia.io API
-// NB: we will select "best" journey (The best journey if you have to display only one.)
-// NB: duration will be retreived in seconds. we will convert duration in minutes.
-
-
-// exemple de trajet départ arrivé
-// https://6e8bb014-7672-40a6-a747-143e75ced700@api.navitia.io/v1/journeys?from=-122.4752;37.80826&to=-122.402770;37.794682&datetime=20170407T120000
-
-//4-a Building the function to get the transport time for one trajet
-
-function nativiaCall(trajet){
-	console.log('nativiaCall called');
-	let lonO=trajet.origin.coordonnees[0];
-	let latO=trajet.origin.coordonnees[1];
-	let lonD=trajet.destination.coordonnees[0];
-	let latD=trajet.destination.coordonnees[1];
-	// let urlNativia = 'https://'+process.env.NATIVIA_TOKEN'@api.navitia.io/v1/journeys?from='+lonO+';'+latO+'&to='+lonD+';'+latD+'&datetime=20170407T120000';
-	let urlNativia = 'https://'+process.env.NATIVIA_TOKEN+'@api.navitia.io/v1/journeys?from='+lonO+';'+latO+'&to='+lonD+';'+latD;
-	let transportTimeMin = '';
-	request(urlNativia, (error, response, body)=>{
-		if (error){
-			console.log('error when calling api nativia');
-		}
-		else{
-			let bodyjson = JSON.parse(body);
-			// console.log('body.journeys:', bodyjson.journeys);
-			console.log('type:', bodyjson.journeys[0].type);
-			// console.log('duration:', bodyjson.journeys[0].duration);
-			let transportTime = bodyjson.journeys[0].duration;
-			transportTimeMin = transportTime/60;
-			console.log('transportTimeMin:', transportTimeMin);
-			updateTrajetBis(trajet,transportTimeMin);
-		}
-	})
-}
-
-function updateTrajetBis(trajet, transp){
-	let query = {code:trajet.code};
-	let updateDoc = {timeTransport:transp};
-	let option = {upsert:true};
-	Trajet.findOneAndUpdate(query,updateDoc,option,(err, resultUpdated) =>{
-		if(err){
-			console.log('error when calling trajet.findOne in updateTrajet');
-		}
-		else{
-			console.log('resultUpdated:', resultUpdated);
-		}
-	})
-}
+// feedMatrixForABatch();
 
 
 
-//4-b feeding the matrix by calling the function for all documents
 
-//test for one trajet: OK
-// Trajet.findOne({code:'5-3'}, (err, resultTrajet)=>{
-// 	if (err){
-// 		console.log('Trajet to update not found');
-// 	}
-// 	else {
-// 		console.log('resultTrajet:', resultTrajet);
-// 		nativiaCall(resultTrajet);
-// 	}
-// })
 
-// 5TH STEP *****************************************
-// exporting DB to csv
+// // 4TH STEP *****************************************
+// // exporting DB to csv
+
+
+
 

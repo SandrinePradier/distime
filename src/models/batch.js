@@ -10,9 +10,10 @@ let batchSchema = new Schema({
 	},
 	communesIndex: { 
 		type: Array,
-   required: true
+   	required: true
 	},
 	status : {
+		//Status: 'Done'/ 'ToDo' / 'InProcess'
 		type: String,
 		required: true
 	}
