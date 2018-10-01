@@ -7,8 +7,7 @@ import {Commune} from './models/commune.js';
 import {Trajet} from './models/trajet.js';
 
 
-// HELPERS for 2ND STEP *******************************************************
-//OK works!
+//HELPERS
 
 //***********creating and saving one trajet******************
 
@@ -58,7 +57,11 @@ async function createAndSaveTrajet(a,b,communes){
 }
 
 
-//To finish.
+//***********checking empty trajets******************
+
+//This function check in Trajet Collection if distance has been feeded.
+// it returns the list of 'empty' Trajets
+//test OK
 let checkEmptyTrajet = async () => {
 	console.log('checkEmpty called');
 	return Trajet.find({distance:{ $exists: false }}, (err, result) => {
@@ -73,48 +76,68 @@ let checkEmptyTrajet = async () => {
 }
 
 
+//***********create some chunks that gather trajets with same origins******************
 
-// HELPERS for 3RD STEP *******************************************************
-//OK works!
+//From a list of trajet this function return array containing arrays 
+//with trajets with comon origins. 
+//test OK
+let chunkTrajetsByOrigin = async(trajetList) => {
+	let trajetListByOrigin = [];
+	//here we extract the unique values of origins
+	let originUniq = _.uniq(trajetList.map((e) => {return e.origin}));
+	//here we compare the origin property in trajet with the unique values extracted
+	//and gather the trajet with same origin in individual arrays
+	for (let i=0; i<originUniq.length; i++){
+		let testList = trajetList.filter((e) => { return e.origin === originUniq[i]});
+		trajetListByOrigin.push(testList);
+	}
+	return trajetListByOrigin;
+}
+
 
 
 //***********retreive the detailed coordinates of a trajet****************
 
+//this function return the geoCoord of an origin from a trajet parameter
+//test: OK
 let ori = async function getOrigin(trajet){
-	// Trajet.findOne()
 	try {
 		return Commune.findOne({codeCommune:trajet.origin},(err, resultOrigin) => {
 			if (err){
-				console.log('Inside mapbox: the origin coordonnées could not be retreived');
+				console.log('Inside getOrigin: the origin coordonnées could not be retreived');
 				return null;
 			}
 			else{
-				console.log('origin:', resultOrigin);
 				return resultOrigin;
 			}
 		});
 	} catch(e){
 		console.log(e);
+		return e;
 	}
 }
 
+//this function return the geoCoord of a destination from a trajet parameter
+//test: OK
 let dest = async function getDestination(trajet){
 	try {
 		return Commune.findOne({codeCommune:trajet.destination},(err, resultDestination) => {
 			if (err){
-				console.log('Inside mapbox: the origin coordonnées could not be retreived')
+				console.log('Inside getDestination: the destination coordonnées could not be retreived')
 			}
 			else{
-				console.log('destination:', resultDestination);
 				return resultDestination;
 			}
 		})
 	} catch (e){
 		console.log(e);
+		return e;
 	}
 	
 }
 
+//this function return a trajet object from trajetcode parameter
+//test : OK
 let trajet = async function getTrajet(trajetCode){
 	try{
 		return Trajet.findOne({code:trajetCode}, (err, resultTrajet) => {
@@ -122,20 +145,44 @@ let trajet = async function getTrajet(trajetCode){
 			console.log('Trajet to update not found');
 		}
 		else {
-			console.log('resultTrajet in getTrajet:', resultTrajet);
 			return resultTrajet ;
 		}
 		})
 	} catch (e){
 		console.log('problem in getTrajet');
+		return e;
 	}
 }
+
+
+//***********feeding geocode for one trajet***********
+
+//parameter; trajetcode
+//return trajet object feeded with origin and destination as geocords
+//test: OK
+let feedOneTrajetWithGeocoord = async(trajetCode) => {
+	return trajet(trajetCode)
+		.then( async (result) => {
+			//insert geocoordonnées in result trajet
+			let resultTrajet = JSON.parse(JSON.stringify(result));
+			let origin = await ori(result);
+			let destination = await dest(result);
+			resultTrajet.origin = origin.coordonnees;
+			resultTrajet.destination = destination.coordonnees;
+		 	return resultTrajet;
+		})
+		.catch((e) => {
+			console.log(e);
+			return e
+		})
+}
+
 
 
 export {
 	createAndSaveTrajet,
 	trajet,
-	dest,
-	ori,
-	checkEmptyTrajet
+	feedOneTrajetWithGeocoord,
+	checkEmptyTrajet,
+	chunkTrajetsByOrigin
 };

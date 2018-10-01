@@ -7,10 +7,8 @@ import morgan from 'morgan';
 import dotEnv from 'dotenv';
 import fs from 'fs';
 import _ from 'underscore';
-
 import moment from 'moment';
-// import hbs from 'hbs';
-// import path from 'path';
+import Bottleneck from 'bottleneck';
 
 dotEnv.config();
 
@@ -201,84 +199,132 @@ app.get('/:id', (req, res) => {
 
 
 //3RD STEP *******************************************************
-//feeding the matrix by calling the function for all trajets
 
+//********** Feeding Matrix For A Batch ****************
 
-		//***********feeding matrix for one trajet***********
+		//TODO
+		//from a list of trajet
+		//gather them from origin, and group them in arrays with all same origins: OK
+		//transform origin and destination into geoCoord for a chunk of 24: OK
+		//prepare variable geoCoord for this group of 24: OK
+		//apply mapBoxgroupCall to each groupOf24 : OK
+		//get result and save them for mapBoxgroupCall: OK
+		//apply nativia to the 24: OK
+		//relaunch feedmatrixForABatch while resultEmptyTrajet.lenght>0; else return done
 
-		function fillOneTrajet (trajetCode){
-			console.log(trajetCode);
-			traj.trajet(trajetCode)
-				.then( async (result) => {
-					//insert geocoordonnées in result trajet
-					let resultTrajet = JSON.parse(JSON.stringify(result));
-					let origin = await traj.ori(result);
-					let destination = await traj.dest(result);
-					resultTrajet.origin = origin.coordonnees;
-					resultTrajet.destination = destination.coordonnees;
-				 	return resultTrajet;
+		
+		async function feedMatrixForABatch(){
+			
+			traj.checkEmptyTrajet()
+			//return an array with trajets which needs to be filled with destination etc....
+				.then((resultEmptyTrajet) => {
+					//prepare this list gathering same origin together in arrays,
+					return traj.chunkTrajetsByOrigin(resultEmptyTrajet);
 				})
-				.then( async(resultTrajet) => {
-					api.mapboxCall(resultTrajet);
-					api.nativiaCall(resultTrajet);
+				.then(async(chunkedList) => {
+				//we will work on the 1st array, to make sure all origins are the same: //list[0].
+				//we will take the 1st 24th of the list.
+					console.log('chunkedList length:', chunkedList.length);
+					chunkedList.forEach((e)=> console.log(e.length));
+					// console.log('chunkedList[0].slice(0,24):', chunkedList[0].slice(0,24));
+					// console.log('chunkedList[0].slice(0,24) length:', chunkedList[0].slice(0,24).length);
+					feedSeveralTrajetsWithApiResults(chunkedList[0].slice(0,24).map((e) => {return e.code}))
 				})
 				.catch((e) => console.log(e))
 		}
+				
+
+	// if (resultEmptyTrajet.length > 0){
+	// 		console.log('resultEmptyTrajet.length', resultEmptyTrajet.length);
+	// 		fillSeveralTrajet(resultEmptyTrajet.slice(0,10).map((e) => {return e.code}))
+	// 		.then(()=>{
+	// 			feedMatrixForABatch()
+	// 		})
+	// 	}
+	// else {
+	// 	console.log('feedingMatrix for the request batch completed');
+	// 	return 'Batch done';
+	// }
+	
+		
+feedMatrixForABatch();
 
 
 
-// fillOneTrajet('175-149');
+		
+		
 
 
-		//***********feeding matrix for several trajets***********
+//this function take a list of trajets codes as parameter, 
+//then return a string with geocoord that will be needed for apimapbox call
+//call the api nativia and mapbox
+//test: OK
 
-		async function fillSeveralTrajet (listTrajetCode) {
+const limiter = new Bottleneck({
+		  minTime: 1000
+		});
+
+
+		let feedSeveralTrajetsWithApiResults = async (listTrajetCode) => {
+			let list = [];
+			let geoCoordString;
 			try {
-				return listTrajetCode.forEach((trajetCode) => {
-					console.log(`trajetCode ${trajetCode} is going to be filled`);
-					fillOneTrajet(trajetCode);
-				})
+				let listWithGeoCoord = [];
+				function step(i){
+					if(i<listTrajetCode.length){
+						listWithGeoCoord[i] = traj.feedOneTrajetWithGeocoord(listTrajetCode[i]);
+						listWithGeoCoord.push(listWithGeoCoord[i]);
+						step(i+1);
+					}
+					else {
+						Promise.all(listWithGeoCoord)
+						.then((values) => {
+							list = values;
+							return list
+						})
+						.then((list)=> {
+						//*************API NATIVA
+							list.forEach((element) => {api.nativiaCall(element)});
+						//*************API MAPBOX
+							//we need to prepare geocord string for api
+							//we need to extract origin from the 1st element of the list, as it will be the same for all
+							let originForApi = list[0].origin;
+							//we need to extract destination from the 24th elements of the list
+							let destinationForApi = list.slice(0,24).map((e)=> { return e.destination.join()});
+							destinationForApi = destinationForApi.join(';');
+						  //we need to provide string such as:
+							// const geoCoord = '-122.418563,37.751659;-122.422969,37.75529;-122.426904,37.759617'
+						  geoCoordString = `${originForApi};${destinationForApi}`;
+						  //then pass this string as parameter for api mapboxcall
+						  api.mapboxGroupCall(geoCoordString)
+						  	.then((mapboxGroupResult)=> {
+						  		api.mapboxGroupSave(mapboxGroupResult, list)
+						  	})
+							  .catch((e) => {
+							  	console.log(e);
+							  })
+						})
+						.catch((e)=>{
+							console.log(e);
+						})
+					}
+				}
+				step(0);
 			}
 			catch (e){
-				console.log('problem in fillSeveralTrajet');
+				console.log('problem in feedSeveralTrajetsWithApiResults:', e);
+				return e;
 			}
 		}
 
-	
 
-		//********** Feeding Matrix For A Batch ****************
-
-		async function feedMatrixForABatch(){
-			traj.checkEmptyTrajet()
-				.then((resultEmptyTrajet) => {
-					//return an array with trajets
-					// console.log('resultEmptyTrajet.length', resultEmptyTrajet.length);
-					// console.log('resultEmptyTrajet', resultEmptyTrajet);
-
-					if (resultEmptyTrajet.length > 0){
-							console.log('resultEmptyTrajet.length', resultEmptyTrajet.length);
-							fillSeveralTrajet(resultEmptyTrajet.slice(0,10).map((e) => {return e.code}))
-							.then(()=>{
-								feedMatrixForABatch()
-							})
-						}
-					else {
-						console.log('feedingMatrix for the request batch completed');
-						return 'Batch done';
-					}
-				})
-		}
-
-
-// feedMatrixForABatch();
-
+		
 
 
 
 
 // // 4TH STEP *****************************************
 // // exporting DB to csv
-
 
 
 
