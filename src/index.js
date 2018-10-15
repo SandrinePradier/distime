@@ -70,24 +70,34 @@ app.get('/', (req, res) => {
 
 // Endpoint with batch number as parameter
 // to launch build matrix and api call in this request.
+//test: OK
 app.get('/:id', (req, res) => {
 	console.log('request to launch batch:',req.params.id);
+	let batchNumber = req.params.id;
+	console.log('batchNumber:', batchNumber);
 	Batch.find({batchName:req.params.id}, (err, result)=>{
 		if(err){
 			res.status(202).json({'error': 'error when retreiving batchList'})
 		}
 		else{
-			res.status(200).json({'data': result});
-			//here we launch the function launch batch.
-			//rajouter la condition si status = 'toDo'
+			console.log('result:', result);
+			com.changeBatchStatus(result[0].batchName, 'InProcess')
+				.then(()=> {
+					res.status(200).json({'data': result});
+				})
+				.then(async() => {
+					let matrix = await buildMatrixForABatch(result[0].communesIndex)
+					.then( async(matrix) => {
+						console.log('batchNumber again:', batchNumber);
+						// let feededMatrix = await feedMatrixForABatch()
+						// .then((feededMatrix) => {
+						// 		com.changeBatchStatus(result[0].batchName, 'Done')
+						// })
+					})
+				})
 			//if batch pair : use 1stKey, if batch impair : use 2ndkey
-		buildMatrixForABatch(result[0].communesIndex)
-		.then(() => {
-			feedMatrixForABatch();
-		})
-		.then(() => console.log('DONE'))
-		.catch((e) => console.log(e))
-	}
+				.catch((e) => console.log(e))
+		}
 			//sinon renvoyer un message que ce batch est déjà lancé.
 			//ensuite il faudra que le batch change de status
 	})
@@ -102,10 +112,10 @@ app.get('/:id', (req, res) => {
 
 		 //our variables
 		let departmentIDF = ['77', '78', '91', '92', '93', '94', '95'];
-		let communeCodeList = [];
 
 		//>>>>>>>>>>>>>>To define
-		let chunk = 6;
+		// Chunk should be a multipl of 3
+		let chunk = 3;
 
 
 		//1-a getting the list of communes from all department exepted Paris
@@ -174,14 +184,14 @@ app.get('/:id', (req, res) => {
 			
 		let buildMatrixForABatch = async (batch) => {
 			//ex of parameter: array with index of communes : [168, 169, 170, 171, 172, 173]
-			//Fonctionne : OK
 			// the number will set the number of elements for the chunk size.
 			//for testing, should be batch / 3
 			//in real life, should be set to 10 for a batch of 30 communes
-			const chunkedList = await _.chunk(batch, 2);
+			//tested: OK
+			const chunkedList = await _.chunk(batch, 1);
 
 			console.log('chunkedList:', chunkedList);
-			// ex chunkedList: [ [ 168, 169 ], [ 170, 171 ], [ 172, 173 ] ]
+			// ex chunkedList of 2: [ [ 168, 169 ], [ 170, 171 ], [ 172, 173 ] ]
 			const resulta = await buildMatrixForAListOfCommunes(chunkedList[0]);
 			const resultb = await buildMatrixForAListOfCommunes(chunkedList[1]);
 			const resultc = await buildMatrixForAListOfCommunes(chunkedList[2]);
@@ -210,118 +220,58 @@ app.get('/:id', (req, res) => {
 		//apply mapBoxgroupCall to each groupOf24 : OK
 		//get result and save them for mapBoxgroupCall: OK
 		//apply nativia to the 24: OK
-		//relaunch feedmatrixForABatch while resultEmptyTrajet.lenght>0; else return done
+		//******************
+		//relaunch feedmatrixForABatch while 
+		//resultEmptyTrajet.lenght>0; else return done: NOT OK NOW returning Done too early
 
 		
 		async function feedMatrixForABatch(){
-			
-			traj.checkEmptyTrajet()
+			traj.checkEmptyTrajet('distance')
 			//return an array with trajets which needs to be filled with destination etc....
 				.then((resultEmptyTrajet) => {
-					//prepare this list gathering same origin together in arrays,
-					return traj.chunkTrajetsByOrigin(resultEmptyTrajet);
+					if (resultEmptyTrajet.length>0){
+						console.log('resultEmptyTrajet.length', resultEmptyTrajet.length);
+						//prepare this list gathering same origin together in arrays,
+						return traj.chunkTrajetsByOrigin(resultEmptyTrajet);
+					}
+					else {
+						console.log('resultEmptyTrajet.length', resultEmptyTrajet.length);
+						return null;
+					}
 				})
 				.then(async(chunkedList) => {
-				//we will work on the 1st array, to make sure all origins are the same: //list[0].
-				//we will take the 1st 24th of the list.
-					console.log('chunkedList length:', chunkedList.length);
-					chunkedList.forEach((e)=> console.log(e.length));
-					// console.log('chunkedList[0].slice(0,24):', chunkedList[0].slice(0,24));
-					// console.log('chunkedList[0].slice(0,24) length:', chunkedList[0].slice(0,24).length);
-					feedSeveralTrajetsWithApiResults(chunkedList[0].slice(0,24).map((e) => {return e.code}))
+					// let done = false;
+					if (chunkedList.length>0)  {
+						//we will work on the 1st array, to make sure all origins are the same: //list[0].
+						//we will take the 1st 24th of the list.
+						console.log('chunkedList length:', chunkedList.length);
+						chunkedList.forEach((e)=> console.log(e.length));
+						traj.feedSeveralTrajetsWithApiResults(chunkedList[0].slice(0,24).map((e) => {return e.code}))
+						.then( async() => { 
+							await feedMatrixForABatch();
+							// done = false;
+							// console.log('done:', done);
+						})
+					}
+					else {
+						console.log('From feedmatrixForABatch the batch is completed');
+						done = true;
+						console.log('done:', done);
+						return done;
+					}
 				})
 				.catch((e) => console.log(e))
 		}
-				
-
-	// if (resultEmptyTrajet.length > 0){
-	// 		console.log('resultEmptyTrajet.length', resultEmptyTrajet.length);
-	// 		fillSeveralTrajet(resultEmptyTrajet.slice(0,10).map((e) => {return e.code}))
-	// 		.then(()=>{
-	// 			feedMatrixForABatch()
-	// 		})
-	// 	}
-	// else {
-	// 	console.log('feedingMatrix for the request batch completed');
-	// 	return 'Batch done';
-	// }
 	
-		
-feedMatrixForABatch();
+//only for testing, as this function will be called from the route app.get('/:id'
+// feedMatrixForABatch();
 
-
-
-		
-		
-
-
-//this function take a list of trajets codes as parameter, 
-//then return a string with geocoord that will be needed for apimapbox call
-//call the api nativia and mapbox
-//test: OK
-
-const limiter = new Bottleneck({
-		  minTime: 1000
-		});
-
-
-		let feedSeveralTrajetsWithApiResults = async (listTrajetCode) => {
-			let list = [];
-			let geoCoordString;
-			try {
-				let listWithGeoCoord = [];
-				function step(i){
-					if(i<listTrajetCode.length){
-						listWithGeoCoord[i] = traj.feedOneTrajetWithGeocoord(listTrajetCode[i]);
-						listWithGeoCoord.push(listWithGeoCoord[i]);
-						step(i+1);
-					}
-					else {
-						Promise.all(listWithGeoCoord)
-						.then((values) => {
-							list = values;
-							return list
-						})
-						.then((list)=> {
-						//*************API NATIVA
-							list.forEach((element) => {api.nativiaCall(element)});
-						//*************API MAPBOX
-							//we need to prepare geocord string for api
-							//we need to extract origin from the 1st element of the list, as it will be the same for all
-							let originForApi = list[0].origin;
-							//we need to extract destination from the 24th elements of the list
-							let destinationForApi = list.slice(0,24).map((e)=> { return e.destination.join()});
-							destinationForApi = destinationForApi.join(';');
-						  //we need to provide string such as:
-							// const geoCoord = '-122.418563,37.751659;-122.422969,37.75529;-122.426904,37.759617'
-						  geoCoordString = `${originForApi};${destinationForApi}`;
-						  //then pass this string as parameter for api mapboxcall
-						  api.mapboxGroupCall(geoCoordString)
-						  	.then((mapboxGroupResult)=> {
-						  		api.mapboxGroupSave(mapboxGroupResult, list)
-						  	})
-							  .catch((e) => {
-							  	console.log(e);
-							  })
-						})
-						.catch((e)=>{
-							console.log(e);
-						})
-					}
-				}
-				step(0);
-			}
-			catch (e){
-				console.log('problem in feedSeveralTrajetsWithApiResults:', e);
-				return e;
-			}
-		}
-
-
-		
-
-
-
+// only for testing
+// com.checkIfBatchHasBeenCompleted();
+	
+//only for testing nativia call with several token
+let testList = ['1-65', '1-25', '1-135']
+// traj.feedSeveralTrajetsWithApiResults(testList);
 
 // // 4TH STEP *****************************************
 // // exporting DB to csv

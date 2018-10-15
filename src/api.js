@@ -129,8 +129,11 @@ import {Trajet} from './models/trajet.js';
 		const latO=trajet.origin[1];
 		const lonD=trajet.destination[0];
 		const latD=trajet.destination[1];
+		let nativiaToken = process.env.NATIVIA_TOKEN2;
+		console.log('nativiaToken:', nativiaToken);
 		// let urlNativia = 'https://'+process.env.NATIVIA_TOKEN'@api.navitia.io/v1/journeys?from='+lonO+';'+latO+'&to='+lonD+';'+latD+'&datetime=20170407T120000';
-		const urlNativia = 'https://'+process.env.NATIVIA_TOKEN+'@api.navitia.io/v1/journeys?from='+lonO+';'+latO+'&to='+lonD+';'+latD;
+		const urlNativia = 'https://'+nativiaToken+'@api.navitia.io/v1/journeys?from='+lonO+';'+latO+'&to='+lonD+';'+latD; 
+		// console.log('urlNativia: ', urlNativia);
 		let transportTimeMin = '';
 		return axios.get(urlNativia)
 		.then((response) => {

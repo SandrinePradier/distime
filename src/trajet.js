@@ -5,6 +5,7 @@ import moment from 'moment';
 
 import {Commune} from './models/commune.js';
 import {Trajet} from './models/trajet.js';
+import * as api from './api.js';
 
 
 //HELPERS
@@ -59,21 +60,86 @@ async function createAndSaveTrajet(a,b,communes){
 
 //***********checking empty trajets******************
 
-//This function check in Trajet Collection if distance has been feeded.
+//This function check in Trajet Collection if property has been feeded.
+//parameter : property = distance or timeTransport
 // it returns the list of 'empty' Trajets
 //test OK
-let checkEmptyTrajet = async () => {
+let checkEmptyTrajet = async (property) => {
 	console.log('checkEmpty called');
-	return Trajet.find({distance:{ $exists: false }}, (err, result) => {
+	return Trajet.find({property:{ $exists: false }}, (err, result) => {
 		if (err) {
 			console.log('error in checkEmptyTrajet');
 			return error;
 		}
 		else {
+			console.log('checkEmptyTrajet result:', result);
 			return result;
 		}
 	})
 }
+
+
+//take as argument trajet code and property such distance or timeTransport
+//return the trajet code when the trajet is not filled with the property
+//test: OK
+let checkIfOneTrajetIsEmpty = async(trajetcode,property) => {
+	let returnedValue;
+	return Trajet.find({code:trajetcode})
+	.then((result)=>{
+		let resultProperty;
+		if (property === 'distance'){
+			resultProperty = result[0].distance;
+		}
+		else if(property === 'timeTransport'){
+			resultProperty = result[0].timeTransport;
+		}
+		// resultProperty = result[0].timeTransport; for testing only
+		if (resultProperty === undefined){
+			returnedValue = trajetcode;
+		}
+		else{
+			returnedValue = 'null';
+		}
+		return returnedValue;
+	})
+	.catch((e)=> {console.log('error in trajetFind in checkIfOneTrajetIsEmpty:', e);
+		return e;
+	})
+}
+
+//call the function checkIfOneTrajetIsEmpty for a list of trajetcode
+//for a given property ( distance , timetransport for instance)
+//should return a list of trajetcode
+//TEST OK
+let checkIfSeveralTrajetsAreEmpty = async(array, property) => {
+	let notFilled = [];
+	try {
+		let listOfTrajetCodeNotCompleted = [];
+		function step(i){
+			if(i<array.length){
+				listOfTrajetCodeNotCompleted[i] = checkIfOneTrajetIsEmpty(array[i], property);
+				listOfTrajetCodeNotCompleted.push(listOfTrajetCodeNotCompleted[i])
+				step(i+1);
+			}
+			else{
+				Promise.all(listOfTrajetCodeNotCompleted)
+				.then((values) =>{
+					notFilled = values;
+						// console.log('notFilled list of trajetcode:', notFilled);
+						return notFilled;
+				})
+				.catch((e)=> console.log(e))
+			}
+		}
+		step(0);
+	}
+	catch(e){
+		console.log('checkIfSeveralTrajetsAreEmpty error:', e);
+		return e;
+	}
+}
+
+
 
 
 //***********create some chunks that gather trajets with same origins******************
@@ -93,6 +159,36 @@ let chunkTrajetsByOrigin = async(trajetList) => {
 	}
 	return trajetListByOrigin;
 }
+
+
+//From a list of trajet code this function return array containing arrays 
+//with trajets with comon commune index. 
+//test: OK
+let chunkTrajetsByCommuneIndex = async(trajetCodeList) => {
+	try {
+		let trajetListByCommuneIndex = [];
+		//here we extract the unique values of origins
+		let communeIndexUniq = _.uniq(trajetCodeList.map((element)=> { 
+				let splitted = element.split('-')[0];
+				return splitted;
+				})
+		);
+		console.log('communeIndexUniq:', communeIndexUniq);
+		//here we compare the origin property in trajet with the unique values extracted
+		//and gather the trajet with same origin in individual arrays
+		for (let i=0; i<communeIndexUniq.length; i++){
+			let testList = trajetCodeList.filter((e) => { return e.split('-')[0] === communeIndexUniq[i]});
+			trajetListByCommuneIndex.push(testList);
+		}
+		return trajetListByCommuneIndex;
+	}
+	catch(e){
+		console.log(' error in chunkTrajetsByCommuneIndex:', e);
+		return e;
+	}
+}
+
+
 
 
 
@@ -179,10 +275,82 @@ let feedOneTrajetWithGeocoord = async(trajetCode) => {
 
 
 
+//***********feeding several trajets with api results.***********
+
+//this function take a list of trajets codes as parameter, 
+//then return a string with geocoord that will be needed for apimapbox call
+//call the api nativia and mapbox
+//test: OK
+
+//not used but good to know
+// const limiter = new Bottleneck({
+// 		  minTime: 1000
+// 		});
+
+
+let feedSeveralTrajetsWithApiResults = async (listTrajetCode) => {
+	let list = [];
+	let geoCoordString;
+	try {
+		let listWithGeoCoord = [];
+		function step(i){
+			if(i<listTrajetCode.length){
+				listWithGeoCoord[i] = feedOneTrajetWithGeocoord(listTrajetCode[i]);
+				listWithGeoCoord.push(listWithGeoCoord[i]);
+				step(i+1);
+			}
+			else {
+				Promise.all(listWithGeoCoord)
+				.then((values) => {
+
+					list = values;
+					console.log('list:', list);
+					return list
+				})
+				.then((list)=> {
+				//*************API NATIVA
+					list.forEach((element) => {api.nativiaCall(element)});
+				//*************API MAPBOX
+					//we need to prepare geocord string for api
+					//we need to extract origin from the 1st element of the list, as it will be the same for all
+					let originForApi = list[0].origin;
+					//we need to extract destination from the 24th elements of the list
+					let destinationForApi = list.slice(0,24).map((e)=> { return e.destination.join()});
+					destinationForApi = destinationForApi.join(';');
+				  //we need to provide string such as:
+					// const geoCoord = '-122.418563,37.751659;-122.422969,37.75529;-122.426904,37.759617'
+				  geoCoordString = `${originForApi};${destinationForApi}`;
+				  //then pass this string as parameter for api mapboxcall
+				  // api.mapboxGroupCall(geoCoordString)
+				  // 	.then((mapboxGroupResult)=> {
+				  // 		api.mapboxGroupSave(mapboxGroupResult, list)
+				  // 	})
+					 //  .catch((e) => {
+					 //  	console.log(e);
+					 //  })
+				})
+				.catch((e)=>{
+					console.log(e);
+				})
+			}
+		}
+		step(0);
+	}
+	catch (e){
+		console.log('problem in feedSeveralTrajetsWithApiResults:', e);
+		return e;
+	}
+}
+
+
 export {
 	createAndSaveTrajet,
 	trajet,
 	feedOneTrajetWithGeocoord,
+	feedSeveralTrajetsWithApiResults,
 	checkEmptyTrajet,
-	chunkTrajetsByOrigin
+	checkIfOneTrajetIsEmpty,
+	checkIfSeveralTrajetsAreEmpty,
+	chunkTrajetsByOrigin,
+	chunkTrajetsByCommuneIndex
 };
