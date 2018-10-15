@@ -123,37 +123,38 @@ import {Trajet} from './models/trajet.js';
 	//**********Building the function to get the transport time for one trajet********
 	//test: OK
 
-	function nativiaCall(trajet){
+	function nativiaCall(trajet, batchNumber){
 		console.log('nativiaCall called');
 		const lonO=trajet.origin[0];
 		const latO=trajet.origin[1];
 		const lonD=trajet.destination[0];
 		const latD=trajet.destination[1];
-		let nativiaToken = process.env.NATIVIA_TOKEN2;
+		selectToken(batchNumber)
+		let nativiaToken = selectToken(batchNumber);
 		console.log('nativiaToken:', nativiaToken);
 		// let urlNativia = 'https://'+process.env.NATIVIA_TOKEN'@api.navitia.io/v1/journeys?from='+lonO+';'+latO+'&to='+lonD+';'+latD+'&datetime=20170407T120000';
 		const urlNativia = 'https://'+nativiaToken+'@api.navitia.io/v1/journeys?from='+lonO+';'+latO+'&to='+lonD+';'+latD; 
 		// console.log('urlNativia: ', urlNativia);
 		let transportTimeMin = '';
-		return axios.get(urlNativia)
-		.then((response) => {
-			if(typeof response.data.journeys ==='undefined' || response.data.journeys === null){
-					console.log('response.data.error:', response.data.error);
-					transportTimeMin = '9999';
-					updateTrajetBis(trajet,transportTimeMin);
-				}
-				else {
-					// ('type:', response.data.journeys[0].type); to confirm we select the 'best' journey
-					const transportTime = response.data.journeys[0].duration;
-					transportTimeMin = Number.parseFloat(transportTime/60).toFixed(1)*10;
-					// transportTime is now in centaines de minutes
-					updateTrajetBis(trajet,transportTimeMin);
-				}
-		})
-		.catch((error)=> {
-			console.log('error when calling nativia API');
-			return error;
-		})
+		// return axios.get(urlNativia)
+		// .then((response) => {
+		// 	if(typeof response.data.journeys ==='undefined' || response.data.journeys === null){
+		// 			console.log('response.data.error:', response.data.error);
+		// 			transportTimeMin = '9999';
+		// 			updateTrajetBis(trajet,transportTimeMin);
+		// 		}
+		// 		else {
+		// 			// ('type:', response.data.journeys[0].type); to confirm we select the 'best' journey
+		// 			const transportTime = response.data.journeys[0].duration;
+		// 			transportTimeMin = Number.parseFloat(transportTime/60).toFixed(1)*10;
+		// 			// transportTime is now in centaines de minutes
+		// 			updateTrajetBis(trajet,transportTimeMin);
+		// 		}
+		// })
+		// .catch((error)=> {
+		// 	console.log('error when calling nativia API');
+		// 	return error;
+		// })
 	}
 
 	//********** Updating the trajet****************
@@ -174,10 +175,41 @@ import {Trajet} from './models/trajet.js';
 	}
 
 
+	//************Function for affecting token depending on batch number*************
+	//parameter: batch number
+	//returns : token
+	//test : OK
+
+	function selectToken(batchNumber){
+  	let lastDigit = batchNumber % 10;
+		console.log('The last digit of ', batchNumber, ' is ', lastDigit);
+		switch (lastDigit) {
+		  case 0:
+		    // console.log('nativia token: ', process.env.NATIVIA_TOKEN0);
+		    return process.env.NATIVIA_TOKEN0;
+		    break;
+		  case 1:
+		    // console.log('nativia token: ', process.env.NATIVIA_TOKEN1);
+		    return process.env.NATIVIA_TOKEN1;
+		    break;
+		  case 2:
+		    // console.log('nativia token: ', process.env.NATIVIA_TOKEN2);
+		    return process.env.NATIVIA_TOKEN2;
+		    break;
+		  default:
+		    // console.log('nativia token: ', process.env.NATIVIA_TOKEN0);
+		    return process.env.NATIVIA_TOKEN0;
+		}
+	}
+
+
+
+
 export {
 	mapboxGroupCall,
 	mapboxGroupSave,
 	updateTrajet,
 	nativiaCall,
-	updateTrajetBis
+	updateTrajetBis,
+	selectToken
 };

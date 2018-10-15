@@ -288,7 +288,7 @@ let feedOneTrajetWithGeocoord = async(trajetCode) => {
 // 		});
 
 
-let feedSeveralTrajetsWithApiResults = async (listTrajetCode) => {
+let feedSeveralTrajetsWithApiResults = async (listTrajetCode, batchNumber) => {
 	let list = [];
 	let geoCoordString;
 	try {
@@ -309,7 +309,7 @@ let feedSeveralTrajetsWithApiResults = async (listTrajetCode) => {
 				})
 				.then((list)=> {
 				//*************API NATIVA
-					list.forEach((element) => {api.nativiaCall(element)});
+					list.forEach((element) => {api.nativiaCall(element, batchNumber)});
 				//*************API MAPBOX
 					//we need to prepare geocord string for api
 					//we need to extract origin from the 1st element of the list, as it will be the same for all

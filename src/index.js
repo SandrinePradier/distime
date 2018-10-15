@@ -89,10 +89,10 @@ app.get('/:id', (req, res) => {
 					let matrix = await buildMatrixForABatch(result[0].communesIndex)
 					.then( async(matrix) => {
 						console.log('batchNumber again:', batchNumber);
-						// let feededMatrix = await feedMatrixForABatch()
-						// .then((feededMatrix) => {
-						// 		com.changeBatchStatus(result[0].batchName, 'Done')
-						// })
+						let feededMatrix = await feedMatrixForABatch(batchNumber)
+						.then((feededMatrix) => {
+								com.changeBatchStatus(result[0].batchName, 'Done')
+						})
 					})
 				})
 			//if batch pair : use 1stKey, if batch impair : use 2ndkey
@@ -225,7 +225,7 @@ app.get('/:id', (req, res) => {
 		//resultEmptyTrajet.lenght>0; else return done: NOT OK NOW returning Done too early
 
 		
-		async function feedMatrixForABatch(){
+		async function feedMatrixForABatch(batchNumber){
 			traj.checkEmptyTrajet('distance')
 			//return an array with trajets which needs to be filled with destination etc....
 				.then((resultEmptyTrajet) => {
@@ -246,11 +246,9 @@ app.get('/:id', (req, res) => {
 						//we will take the 1st 24th of the list.
 						console.log('chunkedList length:', chunkedList.length);
 						chunkedList.forEach((e)=> console.log(e.length));
-						traj.feedSeveralTrajetsWithApiResults(chunkedList[0].slice(0,24).map((e) => {return e.code}))
+						traj.feedSeveralTrajetsWithApiResults(chunkedList[0].slice(0,24).map((e) => {return e.code}), batchNumber)
 						.then( async() => { 
 							await feedMatrixForABatch();
-							// done = false;
-							// console.log('done:', done);
 						})
 					}
 					else {
@@ -271,7 +269,9 @@ app.get('/:id', (req, res) => {
 	
 //only for testing nativia call with several token
 let testList = ['1-65', '1-25', '1-135']
-// traj.feedSeveralTrajetsWithApiResults(testList);
+// traj.feedSeveralTrajetsWithApiResults(testList, 3);
+
+
 
 // // 4TH STEP *****************************************
 // // exporting DB to csv
