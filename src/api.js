@@ -194,6 +194,15 @@ import {Trajet} from './models/trajet.js';
 		  case 2:
 		    return process.env.NATIVIA_TOKEN2;
 		    break;
+		  case 3:
+		    return process.env.NATIVIA_TOKEN0;
+		    break;
+		  case 4:
+		    return process.env.NATIVIA_TOKEN1;
+		    break;
+		  case 5:
+		    return process.env.NATIVIA_TOKEN2;
+		    break;
 		  default:
 		    return process.env.NATIVIA_TOKEN0;
 		}

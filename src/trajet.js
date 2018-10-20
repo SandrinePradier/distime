@@ -321,13 +321,13 @@ let feedSeveralTrajetsWithApiResults = async (listTrajetCode, batchNumber) => {
 					// const geoCoord = '-122.418563,37.751659;-122.422969,37.75529;-122.426904,37.759617'
 				  geoCoordString = `${originForApi};${destinationForApi}`;
 				  //then pass this string as parameter for api mapboxcall
-				  // api.mapboxGroupCall(geoCoordString)
-				  // 	.then((mapboxGroupResult)=> {
-				  // 		api.mapboxGroupSave(mapboxGroupResult, list)
-				  // 	})
-					 //  .catch((e) => {
-					 //  	console.log(e);
-					 //  })
+				  api.mapboxGroupCall(geoCoordString)
+				  	.then((mapboxGroupResult)=> {
+				  		api.mapboxGroupSave(mapboxGroupResult, list)
+				  	})
+					  .catch((e) => {
+					  	console.log(e);
+					  })
 				})
 				.catch((e)=>{
 					console.log(e);
