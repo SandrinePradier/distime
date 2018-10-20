@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import _ from 'underscore';
+import request from 'request';
 
 import {Commune} from './models/commune.js';
 import {parisArr} from './models/parisseeder.js';
@@ -13,8 +14,13 @@ import * as traj from './trajet.js';
 //the batch provides a batch number, an array with communes indexes
 // ( the lenght of the array is the dfined by variable 'chunk'), and a status.
 
+let departmentIDF = ['77', '78', '91', '92', '93', '94', '95'];
+
 function callApiGouv(n){
 	let urlApiGouv = "https://geo.api.gouv.fr/departements/"+departmentIDF[(n)]+"/communes?fields=nom,code,codesPostaux,centre,surface,contour,codeDepartement,departement,codeRegion,region&format=geojson&geometry=centre";
+	console.log('dept:', departmentIDF[(n)]);
+	console.log('urlApi:', urlApiGouv);
+
 	request(urlApiGouv, (error, response, body) => {
 		if (error){
 			console.log('error:', error);

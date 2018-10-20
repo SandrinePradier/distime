@@ -133,28 +133,28 @@ import {Trajet} from './models/trajet.js';
 		let nativiaToken = selectToken(batchNumber);
 		console.log('nativiaToken:', nativiaToken);
 		// let urlNativia = 'https://'+process.env.NATIVIA_TOKEN'@api.navitia.io/v1/journeys?from='+lonO+';'+latO+'&to='+lonD+';'+latD+'&datetime=20170407T120000';
-		const urlNativia = 'https://'+nativiaToken+'@api.navitia.io/v1/journeys?from='+lonO+';'+latO+'&to='+lonD+';'+latD; 
+		const urlNativia = 'https://'+nativiaToken+'@api.navitia.io/v1/journeys?from='+lonO+';'+latO+'&to='+lonD+';'+latD+'&datetime=20181009T080000'; 
 		// console.log('urlNativia: ', urlNativia);
 		let transportTimeMin = '';
-		// return axios.get(urlNativia)
-		// .then((response) => {
-		// 	if(typeof response.data.journeys ==='undefined' || response.data.journeys === null){
-		// 			console.log('response.data.error:', response.data.error);
-		// 			transportTimeMin = '9999';
-		// 			updateTrajetBis(trajet,transportTimeMin);
-		// 		}
-		// 		else {
-		// 			// ('type:', response.data.journeys[0].type); to confirm we select the 'best' journey
-		// 			const transportTime = response.data.journeys[0].duration;
-		// 			transportTimeMin = Number.parseFloat(transportTime/60).toFixed(1)*10;
-		// 			// transportTime is now in centaines de minutes
-		// 			updateTrajetBis(trajet,transportTimeMin);
-		// 		}
-		// })
-		// .catch((error)=> {
-		// 	console.log('error when calling nativia API');
-		// 	return error;
-		// })
+		return axios.get(urlNativia)
+		.then((response) => {
+			if(typeof response.data.journeys ==='undefined' || response.data.journeys === null){
+					console.log('response.data.error:', response.data.error);
+					transportTimeMin = '9999';
+					updateTrajetBis(trajet,transportTimeMin);
+				}
+				else {
+					// ('type:', response.data.journeys[0].type); to confirm we select the 'best' journey
+					const transportTime = response.data.journeys[0].duration;
+					transportTimeMin = Number.parseFloat(transportTime/60).toFixed(1)*10;
+					// transportTime is now in centaines de minutes
+					updateTrajetBis(trajet,transportTimeMin);
+				}
+		})
+		.catch((error)=> {
+			console.log('error when calling nativia API');
+			return error;
+		})
 	}
 
 	//********** Updating the trajet****************
@@ -189,15 +189,12 @@ import {Trajet} from './models/trajet.js';
 		    return process.env.NATIVIA_TOKEN0;
 		    break;
 		  case 1:
-		    // console.log('nativia token: ', process.env.NATIVIA_TOKEN1);
 		    return process.env.NATIVIA_TOKEN1;
 		    break;
 		  case 2:
-		    // console.log('nativia token: ', process.env.NATIVIA_TOKEN2);
 		    return process.env.NATIVIA_TOKEN2;
 		    break;
 		  default:
-		    // console.log('nativia token: ', process.env.NATIVIA_TOKEN0);
 		    return process.env.NATIVIA_TOKEN0;
 		}
 	}

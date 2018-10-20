@@ -95,11 +95,8 @@ app.get('/:id', (req, res) => {
 						})
 					})
 				})
-			//if batch pair : use 1stKey, if batch impair : use 2ndkey
 				.catch((e) => console.log(e))
 		}
-			//sinon renvoyer un message que ce batch est déjà lancé.
-			//ensuite il faudra que le batch change de status
 	})
 })
 
@@ -115,7 +112,7 @@ app.get('/:id', (req, res) => {
 
 		//>>>>>>>>>>>>>>To define
 		// Chunk should be a multipl of 3
-		let chunk = 3;
+		let chunk = 30;
 
 
 		//1-a getting the list of communes from all department exepted Paris
@@ -188,7 +185,7 @@ app.get('/:id', (req, res) => {
 			//for testing, should be batch / 3
 			//in real life, should be set to 10 for a batch of 30 communes
 			//tested: OK
-			const chunkedList = await _.chunk(batch, 1);
+			const chunkedList = await _.chunk(batch, 10);
 
 			console.log('chunkedList:', chunkedList);
 			// ex chunkedList of 2: [ [ 168, 169 ], [ 170, 171 ], [ 172, 173 ] ]
@@ -268,7 +265,7 @@ app.get('/:id', (req, res) => {
 // com.checkIfBatchHasBeenCompleted();
 	
 //only for testing nativia call with several token
-let testList = ['1-65', '1-25', '1-135']
+// let testList = ['1-65', '1-25', '1-135']
 // traj.feedSeveralTrajetsWithApiResults(testList, 3);
 
 
