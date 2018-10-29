@@ -69,7 +69,7 @@ let checkEmptyTrajet = async (property) => {
 	return Trajet.find({property:{ $exists: false }}, (err, result) => {
 		if (err) {
 			console.log('error in checkEmptyTrajet');
-			return error;
+			return err;
 		}
 		else {
 			console.log('checkEmptyTrajet result:', result);
