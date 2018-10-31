@@ -112,7 +112,7 @@ app.get('/:id', (req, res) => {
 
 		//>>>>>>>>>>>>>>To define
 		// Chunk should be a multipl of 3
-		let chunk = 30;
+		let chunk = 15;
 
 
 		//1-a getting the list of communes from all department exepted Paris
@@ -185,7 +185,7 @@ app.get('/:id', (req, res) => {
 			//for testing, should be batch / 3
 			//in real life, should be set to 10 for a batch of 30 communes
 			//tested: OK
-			const chunkedList = await _.chunk(batch, 10);
+			const chunkedList = await _.chunk(batch, 5);
 
 			console.log('chunkedList:', chunkedList);
 			// ex chunkedList of 2: [ [ 168, 169 ], [ 170, 171 ], [ 172, 173 ] ]
